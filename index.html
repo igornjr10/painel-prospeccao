@@ -563,35 +563,34 @@ function escapeHtml(s){
 
 function generateCallScript(l){
   const nome = l.fantasia || l.razao;
-  const cidade = l.cidade;
   const steps = [
     {
-      label: 'Abertura (10s) — sem pitch',
-      text: `Oi, tudo bem? Aqui é [SEU NOME]. Vi que a ${nome} trabalha com veículos aí em ${cidade} — te ligo rápido, tenho só 3 perguntas sobre como vocês estão captando cliente hoje. Consigo 2 minutos?`
+      label: 'Abertura — identificação',
+      text: `Olá, bom dia! Tudo bem?\n\nCom quem eu falo?\n\n(Aguarde a resposta)\n\nPerfeito. Falo com [NOME DO CONTATO], da ${nome}?`
     },
     {
-      label: 'Exploração — situação atual',
-      text: `1) Hoje a maior parte dos seus leads vem de onde: OLX/Webmotors, Instagram, indicação ou anúncio pago?\n2) Quando o lead entra em contato, o que acontece depois? Alguém responde na hora ou fica pra depois?\n3) Vocês registram esse contato em algum lugar ou fica só no zap?`
+      label: 'Apresentação',
+      text: `Prazer, [NOME DO CONTATO]. Meu nome é Pedro.\n\nO motivo do meu contato é bem rápido. Nós somos uma assessoria especializada no mercado automotivo e estamos realizando uma pesquisa com algumas lojas de veículos da região. A ${nome} foi uma das selecionadas para participar.\n\nPosso te fazer uma pergunta rápida?`
     },
     {
-      label: 'Exploração — problema e impacto (não avance sem essa resposta)',
-      text: `4) Desses leads que chegam, quantos você acha que esfriam ou somem sem resposta?\n5) Se você recuperasse esses leads perdidos, quantos carros a mais isso representaria por mês?\n\nDeixe ele fazer a conta. Não complete a frase por ele — quanto mais específico o número que ele disser, mais forte fica o fechamento depois.`
+      label: 'Pergunta de qualificação',
+      text: `(Se autorizar)\n\nHoje, como vocês fazem para gerar clientes? Trabalham com tráfego pago, indicações ou outro canal?\n\n(Ouça a resposta.)\n\nEntendi.`
     },
     {
-      label: 'Necessidade explícita — faça ele pedir a solução',
-      text: `"Faz sentido pra você ter um jeito de garantir que nenhum desses leads se perca, e ainda trazer mais gente pronta pra comprar todo mês?"\n\nEspere o "sim" dele antes de falar qualquer coisa sobre o que você vende.`
+      label: 'Apresentação da solução',
+      text: `Pergunto porque nós ajudamos concessionárias e lojas de veículos a aumentar o número de oportunidades de venda através de uma estratégia que une marketing, CRM inteligente, atendimento automatizado com IA e treinamento comercial. O objetivo é fazer com que mais leads sejam atendidos e convertidos em vendas.`
     },
     {
-      label: 'Apresentação da solução (escolha conforme a dor que ele revelou)',
-      text: `Se o problema foi POUCO LEAD:\n"A solução aqui é colocar a ${nome} na frente de quem já tá procurando carro em ${cidade} agora, todos os dias, sem depender só de indicação."\n\nSe o problema foi LEAD SE PERDENDO:\n"A solução aqui é garantir que todo lead que chega tenha resposta na hora e continue sendo acompanhado até decidir — sem depender de alguém lembrar de responder no zap."\n\nSe os dois:\n"A solução junta as duas pontas: traz mais gente pronta pra comprar e garante que ninguém se perde no meio do caminho."\n\nFale em resultado, não em ferramenta. Só cite nome de produto ou sistema se ele perguntar "como funciona isso na prática".`
+      label: 'Oferta do diagnóstico gratuito',
+      text: `A pesquisa termina com um diagnóstico gratuito de aproximadamente 20 minutos, onde mostramos alguns pontos de melhoria que podem fazer sentido para a operação da ${nome}, sem nenhum custo ou compromisso.\n\nQual fica melhor para você: quarta-feira ou quinta-feira?`
     },
     {
-      label: 'Quebra de objeções',
-      text: `"Já tenho agência / já faço tráfego" → Pergunte o resultado atual (leads/mês, quantos viram venda) e ofereça comparar de graça com o que ele já viu.\n\n"Não tenho orçamento agora" → Volte pro número que ele mesmo deu na Exploração: "você disse que perde X carros/mês por falta de resposta rápida — quanto isso vale?"\n\n"Preciso pensar / falar com o sócio" → Não force o fechamento na ligação. Agende uma call de 15 min com quem decide.`
+      label: 'Agendamento',
+      text: `(Após escolher o dia)\n\nPerfeito. E qual horário funciona melhor para você?\n\n(Após escolher o horário)\n\nExcelente. Ficou agendado para [DIA] às [HORÁRIO]. Vou encaminhar a confirmação pelo WhatsApp e, no horário combinado, faremos essa conversa de aproximadamente 20 minutos.`
     },
     {
-      label: 'Fechamento',
-      text: `Faz sentido eu te mostrar em 15 minutos, numa call rápida, como isso funcionaria especificamente pra ${nome}? Prefere amanhã de manhã ou à tarde?`
+      label: 'Encerramento',
+      text: `Muito obrigado pelo seu tempo e até lá!`
     }
   ];
   const fullText = `SCRIPT DE LIGAÇÃO — ${nome} (${cidade}/${l.uf})\n\n` +
@@ -633,7 +632,7 @@ function openModal(cnpj){
   document.getElementById('modalBody').innerHTML = `
     <div class="script-box">
       <div class="script-box-head">
-        <span class="title">📞 Script de ligação — Tráfego pago + CRM</span>
+        <span class="title">📞 Script de ligação — Pesquisa + Diagnóstico gratuito</span>
         <button class="copy-script-btn" id="copyScriptBtn">Copiar script completo</button>
       </div>
       ${scriptStepsHtml}
