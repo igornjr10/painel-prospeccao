@@ -291,10 +291,10 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
-let supabase = null;
+let sb = null;
 try{
   if(window.supabase && window.supabase.createClient){
-    supabase = window.supabase.createClient('__SUPABASE_URL__', '__SUPABASE_ANON_KEY__');
+    sb = window.supabase.createClient('__SUPABASE_URL__', '__SUPABASE_ANON_KEY__');
   } else {
     console.error('Biblioteca do Supabase não carregou (CDN bloqueado?). O painel funcionará sem salvar status/anotações.');
   }
@@ -323,9 +323,9 @@ let activeFunnelFilter = '';
 function keyOf(l){ return l.cnpj; }
 
 async function loadStates(){
-  if(!supabase){ leadStates = {}; return; }
+  if(!sb){ leadStates = {}; return; }
   try{
-    const { data, error } = await supabase.from('lead_states').select('cnpj, status, notes, updated_at');
+    const { data, error } = await sb.from('lead_states').select('cnpj, status, notes, updated_at');
     if(error) throw error;
     leadStates = {};
     (data || []).forEach(row=>{
@@ -338,9 +338,9 @@ async function loadStates(){
   }catch(e){ console.error('Erro ao carregar estados do Supabase', e); leadStates = {}; }
 }
 async function saveState(cnpj, state){
-  if(!supabase) return;
+  if(!sb) return;
   try{
-    const { error } = await supabase.from('lead_states').upsert({
+    const { error } = await sb.from('lead_states').upsert({
       cnpj,
       status: state.status,
       notes: state.notes,
@@ -572,6 +572,7 @@ function escapeHtml(s){
 
 function generateCallScript(l){
   const nome = l.fantasia || l.razao;
+  const cidade = l.cidade;
   const steps = [
     {
       label: 'Abertura — identificação',
