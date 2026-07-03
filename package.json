@@ -1,0 +1,19 @@
+{
+  "name": "painel-prospeccao",
+  "version": "1.0.0",
+  "description": "Painel de Prospecção Market Pro Ads",
+  "main": "index.html",
+  "scripts": {
+    "dev": "npx http-server -p 3000 -o",
+    "build": "echo 'No build needed for static files'"
+  },
+  "keywords": ["prospeccao", "crm"],
+  "author": "Market Pro Ads",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
