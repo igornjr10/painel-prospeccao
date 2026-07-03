@@ -73,6 +73,29 @@ CREATE POLICY "Public update access" ON lead_states
   FOR UPDATE USING (true);
 ```
 
+#### 3.4 Criar a Tabela `app_settings` (obrigatório para o script editável)
+
+O painel tem um botão **"✏️ Editar"** no script de ligação, que salva o texto
+editado no Supabase (vale para todas as empresas). Sem esta tabela, a edição
+funciona só durante a sessão atual (não persiste ao recarregar a página).
+
+```sql
+CREATE TABLE app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE app_settings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public read access" ON app_settings
+  FOR SELECT USING (true);
+CREATE POLICY "Public write access" ON app_settings
+  FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public update access" ON app_settings
+  FOR UPDATE USING (true);
+```
+
 > ⚠️ Como não há autenticação, essas políticas liberam leitura/escrita para
 > quem tiver a URL do site. Isso é aceitável para uso interno da equipe, mas
 > se o painel for exposto publicamente, considere adicionar login (Supabase Auth)

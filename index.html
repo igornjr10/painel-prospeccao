@@ -215,6 +215,11 @@
     font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;
   }
   .copy-script-btn:hover{background:#ff7a1f;}
+  .edit-script-btn{
+    background:transparent; color:var(--accent); border:1px solid var(--accent-dim); padding:7px 13px; border-radius:7px;
+    font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;
+  }
+  .edit-script-btn:hover{background:var(--accent-soft);}
   .script-step{margin-bottom:12px;}
   .script-step .step-label{
     font-size:10.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--accent); font-weight:800; margin-bottom:4px;
@@ -319,6 +324,7 @@ let currentView = 'list';
 let currentPage = 1;
 const PAGE_SIZE = 25;
 let activeFunnelFilter = '';
+let customScriptTemplate = null;
 
 function keyOf(l){ return l.cnpj; }
 
@@ -348,6 +354,26 @@ async function saveState(cnpj, state){
     });
     if(error) throw error;
   }catch(e){ console.error('Erro ao salvar estado no Supabase', e); }
+}
+async function loadScriptTemplate(){
+  if(!sb) return;
+  try{
+    const { data, error } = await sb.from('app_settings').select('value').eq('key', 'call_script').maybeSingle();
+    if(error) throw error;
+    customScriptTemplate = data ? data.value : null;
+  }catch(e){ console.error('Erro ao carregar script personalizado do Supabase', e); }
+}
+async function saveScriptTemplate(text){
+  customScriptTemplate = text;
+  if(!sb) return;
+  try{
+    const { error } = await sb.from('app_settings').upsert({
+      key: 'call_script',
+      value: text,
+      updated_at: new Date().toISOString()
+    });
+    if(error) throw error;
+  }catch(e){ console.error('Erro ao salvar script personalizado no Supabase', e); }
 }
 function getState(cnpj){
   return leadStates[cnpj] || {status:'novo', notes:'', updatedAt:0};
@@ -570,42 +596,144 @@ function escapeHtml(s){
   return String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
+const DEFAULT_SCRIPT_TEMPLATE = `[ABERTURA — IDENTIFICAÇÃO]
+Olá, bom dia! Tudo bem?
+
+Com quem eu falo?
+
+(Aguarde a resposta)
+
+Perfeito. Falo com [NOME DO CONTATO], da {{empresa}}?
+
+[APRESENTAÇÃO]
+Prazer, [NOME DO CONTATO]. Meu nome é Pedro.
+
+O motivo do meu contato é bem rápido. Nós somos uma assessoria especializada no mercado automotivo e estamos realizando uma pesquisa com algumas lojas de veículos da região. A {{empresa}} foi uma das selecionadas para participar.
+
+Posso te fazer uma pergunta rápida?
+
+[PERGUNTA DE QUALIFICAÇÃO]
+(Se autorizar)
+
+Hoje, como vocês fazem para gerar clientes? Trabalham com tráfego pago, indicações ou outro canal?
+
+(Ouça a resposta.)
+
+Entendi.
+
+[APRESENTAÇÃO DA SOLUÇÃO]
+Pergunto porque nós ajudamos concessionárias e lojas de veículos a aumentar o número de oportunidades de venda através de uma estratégia que une marketing, CRM inteligente, atendimento automatizado com IA e treinamento comercial. O objetivo é fazer com que mais leads sejam atendidos e convertidos em vendas.
+
+[OFERTA DO DIAGNÓSTICO GRATUITO]
+A pesquisa termina com um diagnóstico gratuito de aproximadamente 20 minutos, onde mostramos alguns pontos de melhoria que podem fazer sentido para a operação da {{empresa}}, sem nenhum custo ou compromisso.
+
+Qual fica melhor para você: quarta-feira ou quinta-feira?
+
+[AGENDAMENTO]
+(Após escolher o dia)
+
+Perfeito. E qual horário funciona melhor para você?
+
+(Após escolher o horário)
+
+Excelente. Ficou agendado para [DIA] às [HORÁRIO]. Vou encaminhar a confirmação pelo WhatsApp e, no horário combinado, faremos essa conversa de aproximadamente 20 minutos.
+
+[ENCERRAMENTO]
+Muito obrigado pelo seu tempo e até lá!`;
+
+function parseScriptTemplate(template, nome, cidade){
+  const filled = template.split('{{empresa}}').join(nome).split('{{cidade}}').join(cidade || '');
+  const blocks = filled.split(/\n(?=\[[^\]]+\])/).map(s=>s.trim()).filter(Boolean);
+  const steps = blocks.map(b=>{
+    const m = b.match(/^\[([^\]]+)\]\s*\n?([\s\S]*)$/);
+    return m ? {label: m[1], text: m[2].trim()} : {label: 'Script', text: b};
+  });
+  return steps.length ? steps : [{label:'Script', text: filled}];
+}
+
 function generateCallScript(l){
   const nome = l.fantasia || l.razao;
   const cidade = l.cidade;
-  const steps = [
-    {
-      label: 'Abertura — identificação',
-      text: `Olá, bom dia! Tudo bem?\n\nCom quem eu falo?\n\n(Aguarde a resposta)\n\nPerfeito. Falo com [NOME DO CONTATO], da ${nome}?`
-    },
-    {
-      label: 'Apresentação',
-      text: `Prazer, [NOME DO CONTATO]. Meu nome é Pedro.\n\nO motivo do meu contato é bem rápido. Nós somos uma assessoria especializada no mercado automotivo e estamos realizando uma pesquisa com algumas lojas de veículos da região. A ${nome} foi uma das selecionadas para participar.\n\nPosso te fazer uma pergunta rápida?`
-    },
-    {
-      label: 'Pergunta de qualificação',
-      text: `(Se autorizar)\n\nHoje, como vocês fazem para gerar clientes? Trabalham com tráfego pago, indicações ou outro canal?\n\n(Ouça a resposta.)\n\nEntendi.`
-    },
-    {
-      label: 'Apresentação da solução',
-      text: `Pergunto porque nós ajudamos concessionárias e lojas de veículos a aumentar o número de oportunidades de venda através de uma estratégia que une marketing, CRM inteligente, atendimento automatizado com IA e treinamento comercial. O objetivo é fazer com que mais leads sejam atendidos e convertidos em vendas.`
-    },
-    {
-      label: 'Oferta do diagnóstico gratuito',
-      text: `A pesquisa termina com um diagnóstico gratuito de aproximadamente 20 minutos, onde mostramos alguns pontos de melhoria que podem fazer sentido para a operação da ${nome}, sem nenhum custo ou compromisso.\n\nQual fica melhor para você: quarta-feira ou quinta-feira?`
-    },
-    {
-      label: 'Agendamento',
-      text: `(Após escolher o dia)\n\nPerfeito. E qual horário funciona melhor para você?\n\n(Após escolher o horário)\n\nExcelente. Ficou agendado para [DIA] às [HORÁRIO]. Vou encaminhar a confirmação pelo WhatsApp e, no horário combinado, faremos essa conversa de aproximadamente 20 minutos.`
-    },
-    {
-      label: 'Encerramento',
-      text: `Muito obrigado pelo seu tempo e até lá!`
-    }
-  ];
+  const steps = parseScriptTemplate(customScriptTemplate || DEFAULT_SCRIPT_TEMPLATE, nome, cidade);
   const fullText = `SCRIPT DE LIGAÇÃO — ${nome} (${cidade}/${l.uf})\n\n` +
     steps.map(s => `[${s.label.toUpperCase()}]\n${s.text}`).join('\n\n');
   return {steps, fullText};
+}
+
+function scriptBoxViewHtml(script){
+  const stepsHtml = script.steps.map(s=>`
+    <div class="script-step">
+      <div class="step-label">${escapeHtml(s.label)}</div>
+      <div class="step-text">${escapeHtml(s.text)}</div>
+    </div>
+  `).join('');
+  return `
+    <div class="script-box-head">
+      <span class="title">📞 Script de ligação — Pesquisa + Diagnóstico gratuito</span>
+      <div style="display:flex; gap:8px;">
+        <button class="edit-script-btn" id="editScriptBtn">✏️ Editar</button>
+        <button class="copy-script-btn" id="copyScriptBtn">Copiar script completo</button>
+      </div>
+    </div>
+    ${stepsHtml}
+  `;
+}
+
+function scriptBoxEditHtml(){
+  const raw = customScriptTemplate || DEFAULT_SCRIPT_TEMPLATE;
+  return `
+    <div class="script-box-head">
+      <span class="title">✏️ Editando script (vale para todas as empresas)</span>
+      <div style="display:flex; gap:8px;">
+        <button class="edit-script-btn" id="cancelScriptBtn">Cancelar</button>
+        <button class="copy-script-btn" id="saveScriptBtn">Salvar</button>
+      </div>
+    </div>
+    <textarea id="scriptEditArea" style="min-height:280px;">${escapeHtml(raw)}</textarea>
+    <div class="disclaimer">Use <strong>{{empresa}}</strong> onde quiser que o nome da empresa entre automaticamente. Use <strong>[TÍTULO]</strong> sozinho numa linha para começar uma nova seção do script.</div>
+  `;
+}
+
+function wireScriptBox(l){
+  const box = document.getElementById('scriptBox');
+
+  const copyBtn = document.getElementById('copyScriptBtn');
+  if(copyBtn){
+    copyBtn.addEventListener('click', ()=>{
+      const script = generateCallScript(l);
+      navigator.clipboard?.writeText(script.fullText);
+      copyBtn.textContent = 'Copiado!';
+      setTimeout(()=> copyBtn.textContent = 'Copiar script completo', 1500);
+    });
+  }
+
+  const editBtn = document.getElementById('editScriptBtn');
+  if(editBtn){
+    editBtn.addEventListener('click', ()=>{
+      box.innerHTML = scriptBoxEditHtml();
+      wireScriptBox(l);
+      document.getElementById('scriptEditArea').focus();
+    });
+  }
+
+  const cancelBtn = document.getElementById('cancelScriptBtn');
+  if(cancelBtn){
+    cancelBtn.addEventListener('click', ()=>{
+      box.innerHTML = scriptBoxViewHtml(generateCallScript(l));
+      wireScriptBox(l);
+    });
+  }
+
+  const saveBtn = document.getElementById('saveScriptBtn');
+  if(saveBtn){
+    saveBtn.addEventListener('click', async ()=>{
+      saveBtn.textContent = 'Salvando...';
+      saveBtn.disabled = true;
+      await saveScriptTemplate(document.getElementById('scriptEditArea').value);
+      box.innerHTML = scriptBoxViewHtml(generateCallScript(l));
+      wireScriptBox(l);
+    });
+  }
 }
 
 function openModal(cnpj){
@@ -632,20 +760,10 @@ function openModal(cnpj){
   const cnaesSec = l.cnaes_sec.map(c=>`<span class="cnae-tag">${escapeHtml(c)}</span>`).join('') || '<span style="color:var(--text-dim); font-size:12px;">Nenhum</span>';
 
   const script = generateCallScript(l);
-  const scriptStepsHtml = script.steps.map(s=>`
-    <div class="script-step">
-      <div class="step-label">${escapeHtml(s.label)}</div>
-      <div class="step-text">${escapeHtml(s.text)}</div>
-    </div>
-  `).join('');
 
   document.getElementById('modalBody').innerHTML = `
-    <div class="script-box">
-      <div class="script-box-head">
-        <span class="title">📞 Script de ligação — Pesquisa + Diagnóstico gratuito</span>
-        <button class="copy-script-btn" id="copyScriptBtn">Copiar script completo</button>
-      </div>
-      ${scriptStepsHtml}
+    <div class="script-box" id="scriptBox">
+      ${scriptBoxViewHtml(script)}
     </div>
 
     <div class="field-grid">
@@ -687,14 +805,7 @@ function openModal(cnpj){
     });
   });
 
-  const copyScriptBtn = document.getElementById('copyScriptBtn');
-  if(copyScriptBtn){
-    copyScriptBtn.addEventListener('click', ()=>{
-      navigator.clipboard?.writeText(script.fullText);
-      copyScriptBtn.textContent = 'Copiado!';
-      setTimeout(()=> copyScriptBtn.textContent = 'Copiar script completo', 1500);
-    });
-  }
+  wireScriptBox(l);
 
   const notesArea = document.getElementById('notesArea');
   let notesTimer;
@@ -799,6 +910,7 @@ function setupEvents(){
   document.getElementById('totalBadge').textContent = `${LEADS.length} empresas`;
   populateFilterOptions();
   await loadStates();
+  await loadScriptTemplate();
   setupEvents();
   renderAll();
 })();
