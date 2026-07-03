@@ -96,6 +96,39 @@ CREATE POLICY "Public update access" ON app_settings
   FOR UPDATE USING (true);
 ```
 
+#### 3.5 Criar a Tabela `pipeline_stages` (obrigatório para editar as etapas do funil)
+
+O painel tem um botão **"⚙️ Etapas"** na barra de ferramentas, que permite editar,
+reordenar, adicionar e remover as etapas do funil (Novo, Tentando contato, etc.).
+Sem esta tabela, as mudanças funcionam só durante a sessão atual.
+
+```sql
+CREATE TABLE pipeline_stages (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '#8a8fa3',
+  sort_order INT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE pipeline_stages ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public read access" ON pipeline_stages
+  FOR SELECT USING (true);
+CREATE POLICY "Public write access" ON pipeline_stages
+  FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public update access" ON pipeline_stages
+  FOR UPDATE USING (true);
+CREATE POLICY "Public delete access" ON pipeline_stages
+  FOR DELETE USING (true);
+```
+
+Na primeira vez que o painel carregar com essa tabela vazia, ele preenche
+automaticamente com as 7 etapas padrão (Novo, Tentando contato, Contato feito,
+Reunião marcada, Proposta enviada, Fechado, Perdido). A etapa "Novo" não pode
+ser removida pela interface (é o status padrão de toda empresa ainda não
+trabalhada), mas pode ser renomeada.
+
 > ⚠️ Como não há autenticação, essas políticas liberam leitura/escrita para
 > quem tiver a URL do site. Isso é aceitável para uso interno da equipe, mas
 > se o painel for exposto publicamente, considere adicionar login (Supabase Auth)
