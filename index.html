@@ -284,6 +284,8 @@
   </select>
   <button class="btn" id="resetBtn">Limpar filtros</button>
   <button class="btn" id="exportBtn">⬇ Exportar CSV</button>
+  <button class="btn" id="importBtn">⬆ Importar CSV</button>
+  <input type="file" id="importFileInput" accept=".csv" style="display:none">
   <button class="btn" id="stagesBtn">⚙️ Etapas</button>
   <div class="view-toggle">
     <button id="listViewBtn" class="active">Lista</button>
@@ -923,6 +925,102 @@ function exportCSV(){
   URL.revokeObjectURL(url);
 }
 
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i=0; i<text.length; i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; } else { inQuotes = false; }
+      } else field += c;
+    } else if(c === '"'){ inQuotes = true; }
+    else if(c === ','){ row.push(field); field = ''; }
+    else if(c === '\r'){ /* ignore */ }
+    else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+    else field += c;
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => !(r.length===1 && r[0]===''));
+}
+
+async function bulkSetStates(updates){
+  const now = Date.now();
+  updates.forEach(u=>{
+    leadStates[u.cnpj] = {status: u.status, notes: u.notes, updatedAt: now};
+  });
+  if(!sb || !updates.length) return;
+  try{
+    const rows = updates.map(u=>({
+      cnpj: u.cnpj, status: u.status, notes: u.notes, updated_at: new Date(now).toISOString()
+    }));
+    const chunkSize = 500;
+    for(let i=0; i<rows.length; i+=chunkSize){
+      const { error } = await sb.from('lead_states').upsert(rows.slice(i, i+chunkSize));
+      if(error) throw error;
+    }
+  }catch(e){ console.error('Erro ao salvar importação no Supabase', e); }
+}
+
+async function importCSV(file){
+  const rawText = await file.text();
+  const rows = parseCSV(rawText.replace(/^\uFEFF/, ''));
+  if(rows.length < 2){ alert('Arquivo vazio ou inválido.'); return; }
+
+  const header = rows[0].map(h=>h.trim().toLowerCase());
+  const idx = {
+    cnpj: header.indexOf('cnpj'),
+    status: header.indexOf('status'),
+    notes: header.indexOf('observações') !== -1 ? header.indexOf('observações') : header.indexOf('observacoes')
+  };
+  if(idx.cnpj === -1){ alert('A planilha precisa ter uma coluna "CNPJ".'); return; }
+
+  const leadByCnpj = Object.fromEntries(LEADS.map(l=>[l.cnpj, l]));
+  const labelToId = Object.fromEntries(STAGES.map(s=>[s.label.trim().toLowerCase(), s.id]));
+
+  const updates = [];
+  let notFound = 0, unknownStatus = 0;
+
+  for(let i=1; i<rows.length; i++){
+    const r = rows[i];
+    if(!r || r.every(c=>c==='')) continue;
+    const cnpj = (r[idx.cnpj] || '').trim();
+    if(!cnpj || !leadByCnpj[cnpj]){ if(cnpj) notFound++; continue; }
+
+    const cur = getState(cnpj);
+    let status = cur.status;
+    if(idx.status !== -1){
+      const rawStatus = (r[idx.status] || '').trim().toLowerCase();
+      if(rawStatus){
+        if(labelToId[rawStatus]) status = labelToId[rawStatus];
+        else unknownStatus++;
+      }
+    }
+    const notes = idx.notes !== -1 ? (r[idx.notes] || '') : cur.notes;
+    updates.push({cnpj, status, notes});
+  }
+
+  if(!updates.length){
+    alert('Nenhuma linha com CNPJ reconhecido foi encontrada.');
+    return;
+  }
+
+  const importBtn = document.getElementById('importBtn');
+  const originalLabel = importBtn.textContent;
+  importBtn.textContent = 'Importando...';
+  importBtn.disabled = true;
+  await bulkSetStates(updates);
+  importBtn.textContent = originalLabel;
+  importBtn.disabled = false;
+
+  renderAll();
+  alert(
+    `Importação concluída.\n${updates.length} empresa(s) atualizada(s).` +
+    (notFound ? `\n${notFound} CNPJ(s) não encontrados no painel.` : '') +
+    (unknownStatus ? `\n${unknownStatus} status não reconhecido(s) (mantido o status atual).` : '')
+  );
+}
+
 function slugify(s){
   return s.toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || 'etapa';
@@ -1075,6 +1173,14 @@ function setupEvents(){
     renderAll();
   });
   document.getElementById('exportBtn').addEventListener('click', exportCSV);
+  document.getElementById('importBtn').addEventListener('click', ()=>{
+    document.getElementById('importFileInput').click();
+  });
+  document.getElementById('importFileInput').addEventListener('change', async (e)=>{
+    const file = e.target.files[0];
+    e.target.value = '';
+    if(file) await importCSV(file);
+  });
   document.getElementById('listViewBtn').addEventListener('click', ()=>{
     currentView='list';
     document.getElementById('listViewBtn').classList.add('active');
