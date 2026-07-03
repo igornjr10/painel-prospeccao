@@ -284,8 +284,8 @@
   </select>
   <button class="btn" id="resetBtn">Limpar filtros</button>
   <button class="btn" id="exportBtn">⬇ Exportar CSV</button>
-  <button class="btn" id="importBtn">⬆ Importar CSV</button>
-  <input type="file" id="importFileInput" accept=".csv" style="display:none">
+  <button class="btn" id="importBtn">⬆ Importar Planilha</button>
+  <input type="file" id="importFileInput" accept=".csv,.xlsx,.xls" style="display:none">
   <button class="btn" id="stagesBtn">⚙️ Etapas</button>
   <div class="view-toggle">
     <button id="listViewBtn" class="active">Lista</button>
@@ -329,6 +329,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 let sb = null;
 try{
@@ -962,9 +963,35 @@ async function bulkSetStates(updates){
   }catch(e){ console.error('Erro ao salvar importação no Supabase', e); }
 }
 
-async function importCSV(file){
-  const rawText = await file.text();
-  const rows = parseCSV(rawText.replace(/^\uFEFF/, ''));
+async function importFile(file){
+  const name = file.name.toLowerCase();
+  let rows;
+
+  if(name.endsWith('.xlsx') || name.endsWith('.xls')){
+    if(!window.XLSX){
+      alert('Não foi possível carregar o suporte a planilhas Excel (biblioteca não carregou). Tente novamente ou use um arquivo CSV.');
+      return;
+    }
+    try{
+      const buffer = await file.arrayBuffer();
+      const wb = window.XLSX.read(buffer, {type:'array'});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      rows = window.XLSX.utils.sheet_to_json(sheet, {header:1, defval:'', raw:false})
+        .map(r => r.map(c => String(c ?? '')));
+    }catch(e){
+      console.error('Erro ao ler planilha Excel', e);
+      alert('Não foi possível ler esse arquivo Excel. Verifique se ele não está corrompido.');
+      return;
+    }
+  } else {
+    const rawText = await file.text();
+    rows = parseCSV(rawText.replace(/^\uFEFF/, ''));
+  }
+
+  await processImportRows(rows);
+}
+
+async function processImportRows(rows){
   if(rows.length < 2){ alert('Arquivo vazio ou inválido.'); return; }
 
   const header = rows[0].map(h=>h.trim().toLowerCase());
@@ -1179,7 +1206,7 @@ function setupEvents(){
   document.getElementById('importFileInput').addEventListener('change', async (e)=>{
     const file = e.target.files[0];
     e.target.value = '';
-    if(file) await importCSV(file);
+    if(file) await importFile(file);
   });
   document.getElementById('listViewBtn').addEventListener('click', ()=>{
     currentView='list';
